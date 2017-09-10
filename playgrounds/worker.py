@@ -1,4 +1,5 @@
 import json
+import sys
 
 import zmq.asyncio
 import zmq
@@ -20,6 +21,13 @@ class Worker:
 
         self.gatherer_zmocket = ctx.socket(zmq.ROUTER)
         self.gatherer_zmocket.connect("tcp://127.0.0.1:6666")
+        self.gatherer_zmocket.connect("tcp://127.0.0.1:6665")
+
+        self.wave_zmocket = ctx.socket(zmq.ROUTER)
+        self.wave_zmocket.setsockopt(zmq.IDENTITY, name.encode())
+        self.wave_zmocket.connect("tcp://127.0.0.1:6670")  # gatherer 1
+        self.wave_zmocket.connect("tcp://127.0.0.1:6671")  # gatherer 2
+        self.wave_zmocket.connect("tcp://127.0.0.1:6672")  # controller
 
         self.name = name
 
@@ -38,25 +46,25 @@ class Worker:
                     result = int(work_unit["operands"][0] / work_unit["operands"][1])
                 else:
                     result = work_unit["operands"][0] - work_unit["operands"][1]
-                await self.gatherer_zmocket.send_multipart(["gatherer1".encode(), json.dumps({"result": result,
-                                                       "work_unit": work_unit,
-                                                       "worker": self.name}).encode()])
+
+                gatherer = "gatherer_odd"
+                if result % 2 == 0:
+                    gatherer = "gatherer_even"
+
+                await self.gatherer_zmocket.send_multipart([gatherer.encode(), json.dumps({"result": result,
+                                                   "work_unit": work_unit,
+                                                   "worker": self.name}).encode()])
             except:
                 print("No work there: "+self.name)
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1)
 
 
 if __name__ == "__main__":
 
-    worker_ports = [42421, 42422, 42423]
-    workers = []
-    for worker_port in worker_ports:
-        worker = Worker("worker-"+str(worker_port))
-        workers.append(worker)
+    worker_name = sys.argv[1]
 
-    for worker in workers:
-        asyncio.ensure_future(worker.pulling_work())
+    worker = Worker(worker_name)
 
     loop = asyncio.get_event_loop()
-    loop.run_forever()
+    loop.run_until_complete(worker.pulling_work())
     loop.close()

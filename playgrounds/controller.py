@@ -12,11 +12,16 @@ ctx = zmq.asyncio.Context()
 
 _OPERATORS = ["ADD", "MUL", "DIV", "SUB"]
 
+
 class Controller:
 
     def __init__(self):
         self.zmocket = ctx.socket(zmq.PUSH)
         self.zmocket.bind("tcp://127.0.0.1:6667")
+
+        self.wave_zmocket = ctx.socket(zmq.ROUTER)
+        self.wave_zmocket.setsockopt(zmq.IDENTITY, "controller".encode())
+        self.wave_zmocket.bind("tcp://127.0.0.1:6672")
 
     async def publish_work(self):
         i = 0
@@ -27,10 +32,9 @@ class Controller:
             }
             await self.zmocket.send_json(work_unit)
 
-            print("Work sent to workers: "+str(work_unit))
+            print("Work sent to workers "+str(i)+": "+str(work_unit))
 
-            if i % 3 == 0:
-                await asyncio.sleep(0.5)
+            await asyncio.sleep(0.1)
             i += 1
 
 if __name__ == "__main__":
