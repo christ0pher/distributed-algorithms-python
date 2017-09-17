@@ -25,31 +25,30 @@ class Wave:
         self.wave_zmocket = wave_zmocket
         self.neighbors = []
         self.controller = controller
-        self.wave_request = {}
         self.wave_responses = []
         self.last_wave = datetime.datetime.utcnow()
         self.parent = None
         self.name = name
         self.wave_init = False
+        self.wave_request = {}
 
     async def run_wave(self):
 
         try:
             msg = await self.wave_zmocket.recv_json(flags=zmq.NOBLOCK)
-            send_msg, receiver, msg = self.handle_wave_message(msg)
+            send_msg, message_list = self.handle_wave_message(msg)
+
+            if datetime.datetime.utcnow() - self.last_wave > datetime.timedelta(seconds=3) \
+                    and self.controller:
+                self.init_wave()
+                send_msg, message_list = self.mk_wave_request()
+
             if send_msg:
-                await self.wave_zmocket.send_multipart([receiver.encode(),
-                                                        json.dumps(msg).encode()])
+                for msg in message_list:
+                    await self.wave_zmocket.send_multipart([msg["receiver"].encode(),
+                                                            json.dumps(msg["message"]).encode()])
         except Exception as e:
             print("Error: "+str(e))
-
-        if datetime.datetime.utcnow() - self.last_wave > datetime.timedelta(seconds=3) \
-                and self.controller:
-            self.init_wave()
-            try:
-                self.send_wave_request()
-            except Exception as e:
-                print("Error sending: "+str(e))
 
     def handle_wave_message(self, msg):
         sender = msg["sender"]
@@ -70,7 +69,7 @@ class Wave:
                     "parent": self.parent,
                     "responses": self.wave_responses
                 }
-                return True, self.parent, response
+                return True, [{"receiver": self.parent, "message": response}]
 
             elif all_neighbors and self.controller:
                 print("WAVE IS DONE")
@@ -79,7 +78,7 @@ class Wave:
             self.init_wave()
             self.parent = sender
             if len(self.neighbors) != 0:
-                self.send_wave_request()
+                return True, self.mk_wave_request()
             if len(self.neighbors) == 0:
                 response = {
                     "sender": self.name,
@@ -87,18 +86,20 @@ class Wave:
                     "parent": self.parent,
                     "responses": self.wave_responses
                 }
-                return True, self.parent, response
+                return True, [{"receiver": self.parent, "message": response}]
 
-        return False, _, _
+        return False, None
 
-    def send_wave_request(self):
+    def mk_wave_request(self):
+        request = {
+            "type": "wave_request",
+            "sender": self.name
+        }
+        receivers = []
         for neighbor in self.neighbors:
-            request = {
-                "type": "wave_request",
-                "sender": self.name
-            }
-            self.wave_zmocket.send_multipart([neighbor.encode(),
-                                                    json.dumps(request).encode()])
+            receivers.append({"receiver": neighbor, "message": request})
+            self.wave_request[neighbor] = False
+        return receivers
 
     def init_wave(self):
         print("INITIALIZING WAVE")
