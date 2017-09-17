@@ -1,8 +1,12 @@
+import asyncio
 from random import randint
 
-import zmq.asyncio
 import zmq
-import asyncio
+import zmq.asyncio
+
+from distributed_algorithms.wave_algorithm import Wave
+
+CONTROLLER = "controller"
 
 __author__ = 'christopher@levire.com'
 
@@ -20,22 +24,17 @@ class Controller:
         self.zmocket.bind("tcp://127.0.0.1:6667")
 
         self.wave_zmocket = ctx.socket(zmq.ROUTER)
-        self.wave_zmocket.setsockopt(zmq.IDENTITY, "controller".encode())
+        self.wave_zmocket.setsockopt(zmq.IDENTITY, CONTROLLER.encode())
         self.wave_zmocket.bind("tcp://127.0.0.1:6672")
 
+        self.wave = Wave(self.wave_zmocket, controller=True, name=CONTROLLER)
+
     async def publish_work(self):
-        i = 0
+
         while True:
-            work_unit = {
-                "operator": _OPERATORS[randint(0, 3)],
-                "operands": [randint(1, 10), randint(1, 3)]
-            }
-            await self.zmocket.send_json(work_unit)
 
-            print("Work sent to workers "+str(i)+": "+str(work_unit))
-
-            await asyncio.sleep(0.1)
-            i += 1
+            await asyncio.sleep(0.5)
+            await self.wave.run_wave()
 
 if __name__ == "__main__":
 
