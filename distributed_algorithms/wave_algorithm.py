@@ -36,19 +36,27 @@ class Wave:
 
         try:
             msg = await self.wave_zmocket.recv_json(flags=zmq.NOBLOCK)
+            print("%s received the message %s" % (self.name, str(msg)))
             send_msg, message_list = self.handle_wave_message(msg)
 
-            if datetime.datetime.utcnow() - self.last_wave > datetime.timedelta(seconds=3) \
-                    and self.controller:
-                self.init_wave()
-                send_msg, message_list = self.mk_wave_request()
-
-            if send_msg:
-                for msg in message_list:
-                    await self.wave_zmocket.send_multipart([msg["receiver"].encode(),
-                                                            json.dumps(msg["message"]).encode()])
+            await self.snd_msg(message_list, send_msg)
         except Exception as e:
             print("Error: "+str(e))
+
+        if datetime.datetime.utcnow() - self.last_wave > datetime.timedelta(seconds=10) \
+                and self.controller:
+            self.init_wave()
+            send_msg, message_list = self.mk_wave_request()
+
+            await self.snd_msg(message_list, send_msg)
+
+    async def snd_msg(self, message_list, send_msg):
+        if send_msg:
+            print(str(message_list))
+            for msg in message_list:
+                print("Sending message %s" % str(msg))
+                await self.wave_zmocket.send_multipart([msg["receiver"].encode(),
+                                                        json.dumps(msg["message"]).encode()])
 
     def handle_wave_message(self, msg):
         sender = msg["sender"]
@@ -78,7 +86,7 @@ class Wave:
             self.init_wave()
             self.parent = sender
             if len(self.neighbors) != 0:
-                return True, self.mk_wave_request()
+                return self.mk_wave_request()
             if len(self.neighbors) == 0:
                 response = {
                     "sender": self.name,
@@ -99,11 +107,11 @@ class Wave:
         for neighbor in self.neighbors:
             receivers.append({"receiver": neighbor, "message": request})
             self.wave_request[neighbor] = False
-        return receivers
+        return True, receivers
 
     def init_wave(self):
         print("INITIALIZING WAVE")
-        self.wave_responses = {}
+        self.wave_responses = []
         self.wave_request = {}
         self.last_wave = datetime.datetime.utcnow()
 

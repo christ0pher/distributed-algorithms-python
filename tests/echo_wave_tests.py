@@ -47,6 +47,7 @@ class EchoWaveAlgorithm(unittest.TestCase):
 
         send_message, message_list = self.wave_algorithm.handle_wave_message(wave_request)
 
+        self.assertEqual(len(self.wave_algorithm.neighbors), 1)
         self.assertTrue(send_message)
         self.assertEqual(len(message_list), 1)
         self.assertFalse(self.wave_algorithm.wave_request["neighbor_1"])
@@ -107,3 +108,9 @@ class EchoWaveAlgorithm(unittest.TestCase):
                                                           response
                                                       ]})
         self.assertEqual(message_list[0]["receiver"], "test_case")
+
+    def test_init_wave(self):
+        self.wave_algorithm.init_wave()
+
+        self.assertEqual(self.wave_algorithm.wave_responses, [])
+        self.assertEqual(self.wave_algorithm.wave_request, {})
